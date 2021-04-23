@@ -1,12 +1,18 @@
 const {jwtSign, jwtVerify} = require('../utils/jwtUtils')
-const {autenticate, getAllUsers, getUserBysAMAccountName} = require('../utils/ldapUtils')
+const {
+  autenticate,
+  getAllUsers,
+  getUserBysAMAccountName,
+  addUser,
+  deleteUser
+} = require('../utils/ldapUtils')
 const ldapp = require('../utils/ldapUtils')
 
 
 exports.login = async function (req, res) {
   try {
-    await autenticate({username: 'jetorres', password: 'Qwer1234.'});
-    let user = await getUserBysAMAccountName('jetorres')
+    await autenticate(req.body);
+    let user = await getUserBysAMAccountName(req.body.username)
     let token = await jwtSign(user);
     res.status(200).json({
       nombreUsuario: user.nombreCompleto,
@@ -46,5 +52,22 @@ exports.updateUser = async function (req, res) {
     } else {
       res.status(500).send('Ocurrio un error');
     }
+  }
+}
+
+exports.addUser = async function (req, res) {
+  try {
+    await addUser(req.body);
+    res.status(200).send('ok');
+  } catch (e) {
+    res.status(500).send(e);
+  }
+}
+exports.deleteUser = async function (req, res) {
+  try {
+    await deleteUser();
+    res.status(200).send('ok');
+  } catch (e) {
+    res.status(500).send(e);
   }
 }
