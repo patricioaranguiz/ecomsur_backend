@@ -20,6 +20,7 @@ exports.login = async function (req, res) {
       token
     });
   } catch (e) {
+    console.log(e);
     res.status(500).send(e);
   }
 }
@@ -27,11 +28,10 @@ exports.login = async function (req, res) {
 exports.getAllUsers = async function (req, res) {
   try {
     const payload = await jwtVerify(req.headers.authorization);
-    console.log(payload)
-    // await autenticate({username: 'jetorres', password: 'Qwer1234.'});
     let users = await getAllUsers();
     res.status(200).json(users)
   } catch (e) {
+    console.log(e)
     if (e.code) {
       res.status(e.code).send(e.message);
     } else {
@@ -44,7 +44,7 @@ exports.updateUser = async function (req, res) {
   try {
     const payload = await jwtVerify(req.headers.authorization);
     const body = req.body;
-    const users = await ldapp.updateUser(payload, body)
+    const users = await ldapp.updateUser(body)
     res.status(200).json(users)
   } catch (e) {
     if (e.code) {
