@@ -71,10 +71,26 @@ async function getAllUsers() {
             var opts = {
                 filter: "(objectClass=*)",
                 scope: "sub",
-                attributes: ["sn", "givenName", "cn", "sAMAccountName", "memberOf", "displayName", "mail"],
+                attributes: [
+                    "distinguishedName",
+                    "cn",
+                    "givenName",
+                    "sn",
+                    "displayName",
+                    "mail",
+                    "sAMAccountName",
+                    "title",
+                    "userWorkstations",
+                    "telephoneNumber",
+                    "streetAddress",
+                    "company",
+                    "department",
+                    "description",
+                    "memberOf"
+                ],
             };
             client.search(
-                "OU=Usuarios_,DC=ecomsur,DC=cl",
+                process.env.OUUSERS,
                 opts,
                 function (err, res) {
                     if (err) {
@@ -82,10 +98,8 @@ async function getAllUsers() {
                         reject(err)
                     } else {
                         res.on("searchEntry", function (entry) {
-                            console.log("entry : " + JSON.stringify(entry.object));
+                            // console.log("entry : " + JSON.stringify(entry.object));
                             if (entry.object.sAMAccountName) {
-                                console.log(entry.object.memberOf)
-                                console.log(typeof entry.object.memberOf)
                                 let arrayGrupos = entry.object.memberOf ? typeof entry.object.memberOf === "object" ? entry.object.memberOf : [entry.object.memberOf] : []
                                 array.push({
                                     nombreCompleto: entry.object.cn,
@@ -93,7 +107,14 @@ async function getAllUsers() {
                                     firstName: entry.object.givenName,
                                     lastName: entry.object.sn,
                                     groups: arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
-                                    mail: entry.object.mail
+                                    mail: entry.object.mail,
+                                    title: entry.object.title,
+                                    workstations: entry.object.userWorkstations,
+                                    telephoneNumber: entry.object.telephoneNumber,
+                                    streetAddress: entry.object.streetAddress,
+                                    company: entry.object.company,
+                                    department: entry.object.department,
+                                    description: entry.object.description
                                 });
                             }
                         });
@@ -103,7 +124,6 @@ async function getAllUsers() {
                                 client.destroy()
                                 reject({code: 403, message: "Credenciales Invalidas"});
                             } else {
-                                client.destroy()
                                 reject(err);
                             }
                         });
@@ -142,6 +162,7 @@ async function getUserBysAMAccountName(sAMAccountName) {
                         if (entry.object.sAMAccountName) {
                             let arrayGrupos = entry.object.memberOf ? typeof entry.object.memberOf === "object" ? entry.object.memberOf : [entry.object.memberOf] : []
                             user = {
+                                dn: entry.object.dn,
                                 nombreCompleto: entry.object.cn,
                                 userName: entry.object.sAMAccountName,
                                 role: arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
@@ -162,27 +183,41 @@ async function getUserBysAMAccountName(sAMAccountName) {
 }
 
 async function addUser(user) {
+    console.log(user);
     return new Promise(async (resolve, reject) => {
-
-        var newDN = `cn=${user.firstName} ${user.lastName},OU=Usuarios_,DC=ecomsur,DC=cl`;
+        var newDN = `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`;
         var newUser = {
-            distinguishedName: `cn=${user.firstName} ${user.lastName},OU=Usuarios_,DC=ecomsur,DC=cl`,
+            distinguishedName: `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`,
             cn: `${user.firstName} ${user.lastName}`,
-            givenName: user.lastName.toString(),
-            sn: user.firstName.toString(),
+            givenName: user.firstName.toString(),
+            sn: user.lastName.toString(),
             displayName: `${user.firstName} ${user.lastName}`,
-            mail: `${user.username}@ecomsur.cl`,
+            mail: `${user.username}@${process.env.DOMAIN}`,
             uid: user.username.toString(),
-            userPrincipalName: `${user.username}@ecomsur.cl`,
+            // userPrincipalName: `${user.username}@${process.env.DOMAIN}`,
             sAMAccountName: user.username.toString(),
             objectClass: ['top', 'person', 'organizationalPerson', 'user'],
             // userPassword: encodePassword('Qwer1234.'),
             userAccountControl: '544',
+            title: user.employment.toString(),
+            userWorkstations: user.workstations.toString(),
+            telephoneNumber: parseInt(user.phoneNumber),
+            streetAddress: user.streetAddress.toString(),
+            company: user.company.toString(),
+            department: user.department.toString(),
+            description: user.rut.toString()
         }
         client.add(newDN, newUser, function (err) {
             if (err) {
-                reject(err);
                 console.log("err in new user " + err);
+                if (JSON.stringify(err.lde_message).includes("DSID-0C090FC5")) {
+                    client.destroy()
+                    reject({code: 403, message: "Credenciales Invalidas"});
+                } else if(JSON.stringify(err.lde_message).includes("ENTRY_EXISTS")) {
+                    reject({code: 409, message: "Usuario existente"})
+                } else {
+                    reject(err);
+                }
             } else {
                 console.log("added user")
                 resolve(true);
@@ -197,9 +232,19 @@ async function updateUser(user) {
     console.log(user);
     return new Promise(async (resolve, reject) => {
         let userCurrent = await getUserBysAMAccountName(user.username);
-        console.log(userCurrent);
-
-        client.modify(`CN=${userCurrent.nombreCompleto},OU=Usuarios_,DC=ecomsur,DC=cl`, [
+        client.modify(`CN=${userCurrent.nombreCompleto},${process.env.OUUSERS}`, [
+/*            new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    distinguishedName: `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`
+                }
+            }),
+            new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    cn: `${user.firstName} ${user.lastName}`
+                }
+            }),*/
             new ldap.Change({
                 operation: 'replace',
                 modification: {
@@ -210,6 +255,51 @@ async function updateUser(user) {
                 modification: {
                     sn: user.lastName.toString(),
                 }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    displayName: `${user.firstName} ${user.lastName}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    mail:  `${user.email}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    title:  `${user.employment}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    userWorkstations:  `${user.workstations}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    telephoneNumber:  `${user.phoneNumber}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    streetAddress:  `${user.streetAddress}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    company:  `${user.company}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    department:  `${user.department}`,
+                }
+            }), new ldap.Change({
+                operation: 'replace',
+                modification: {
+                    description:  `${user.rut}`,
+                }
             })
         ], (err) => {
             if (err) {
@@ -219,42 +309,15 @@ async function updateUser(user) {
                 console.log("add update user");
                 resolve(true);
             }
-        })
-
-
-        /*var change = new ldap.Change({
-            operation: 'replace',  //use add to add new attribute
-            //operation: 'replace', // use replace to update the existing attribute
-            modification: {
-                // distinguishedName: `cn=${user.firstName} ${user.lastName},OU=Usuarios_,DC=ecomsur,DC=cl`,
-                // cn: `${user.firstName} ${user.lastName}`,
-
-                displayName: `${user.firstName} ${user.lastName}`,
-                mail: `${user.username}@ecomsur.cl`,
-                // userPrincipalName: `${user.username}@ecomsur.cl`,
-            }
         });
-        client.modify(`CN=${userCurrent.nombreCompleto},OU=TI_,OU=Usuarios_,DC=ecomsur,DC=cl`, change, (err) => {
-                if (err) {
-                    console.log("err in update user " + err);
-                } else {
-                    console.log("add update user");
-                    resolve(true);
-                }
-            }
-        );*/
     });
 }
 
-async function deleteUser() {
-
+async function deleteUser(username) {
     return new Promise(async (resolve, reject) => {
         try {
-            await autenticate({
-                "username": "jetorres",
-                "password": "Qwer1234."
-            })
-            client.del('cn=new rguyyyy,OU=Usuarios_,DC=ecomsur,DC=cl', (err) => {
+            let userInfo = await getUserBysAMAccountName(username);
+            client.del(userInfo.dn, (err) => {
                 if (err) {
                     reject(err)
                 } else {

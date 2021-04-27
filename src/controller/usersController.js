@@ -20,7 +20,6 @@ exports.login = async function (req, res) {
       token
     });
   } catch (e) {
-    console.log(e);
     res.status(500).send(e);
   }
 }
@@ -58,16 +57,21 @@ exports.updateUser = async function (req, res) {
 exports.addUser = async function (req, res) {
   try {
     await addUser(req.body);
-    res.status(200).send('ok');
+    res.status(200).send(true);
   } catch (e) {
-    res.status(500).send(e);
+    if (e.code) {
+      res.status(e.code).send(e.message);
+    } else {
+      res.status(500).send('Ocurrio un error');
+    }
   }
 }
 exports.deleteUser = async function (req, res) {
   try {
-    await deleteUser();
-    res.status(200).send('ok');
+    await deleteUser(req.params.username);
+    res.status(200).send(true);
   } catch (e) {
+    console.log(e);
     res.status(500).send(e);
   }
 }
