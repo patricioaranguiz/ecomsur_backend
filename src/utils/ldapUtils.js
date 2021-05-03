@@ -1,10 +1,26 @@
 const ldap = require("ldapjs");
+const fs = require("fs");
 const ldapOptions = {
-    url: ["ldap://192.168.0.22:389"],
+    url: ["ldap://192.168.0.7:389"],
     bindDN: "ecomsur.cl",
     reconnect: true,
     idleTimeout: 3000,
 };
+
+var tlsOptions = {
+    host: '192.168.0.7',
+    port: '636',
+    ca: [fs.readFileSync(__dirname + '/ldaps636.cer')],
+    rejectUnauthorized: false
+};
+
+/*const ldapOptions = {
+    url: "ldaps://192.168.0.7:636",
+    bindDN: "ecomsur.cl",
+    reconnect: true,
+    idleTimeout: 3000,
+    tlsOptions: tlsOptions
+};*/
 
 
 let client = ldap.createClient(ldapOptions);
@@ -165,6 +181,7 @@ async function getUserBysAMAccountName(sAMAccountName) {
                                 dn: entry.object.dn,
                                 nombreCompleto: entry.object.cn,
                                 userName: entry.object.sAMAccountName,
+                                memberOf: entry.object.memberOf,
                                 role: arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
                             };
                         }
@@ -207,19 +224,21 @@ async function addUser(user) {
             department: user.department.toString(),
             description: user.rut.toString()
         }
-        client.add(newDN, newUser, function (err) {
+        client.add(newDN, newUser, async function (err) {
             if (err) {
                 console.log("err in new user " + err);
                 if (JSON.stringify(err.lde_message).includes("DSID-0C090FC5")) {
                     client.destroy()
                     reject({code: 403, message: "Credenciales Invalidas"});
-                } else if(JSON.stringify(err.lde_message).includes("ENTRY_EXISTS")) {
+                } else if (JSON.stringify(err.lde_message).includes("ENTRY_EXISTS")) {
                     reject({code: 409, message: "Usuario existente"})
                 } else {
                     reject(err);
                 }
             } else {
                 console.log("added user")
+                await removeUserGroup(user.username);
+                await addUserGroup(user.username, user.groups);
                 resolve(true);
             }
         });
@@ -230,83 +249,76 @@ async function addUser(user) {
 
 async function updateUser(user) {
     console.log(user);
+    let arrayGroupsDelete = [];
+    let arrayGroupAdd = [];
     return new Promise(async (resolve, reject) => {
         let userCurrent = await getUserBysAMAccountName(user.username);
-        client.modify(`CN=${userCurrent.nombreCompleto},${process.env.OUUSERS}`, [
-/*            new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    distinguishedName: `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`
-                }
-            }),
-            new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    cn: `${user.firstName} ${user.lastName}`
-                }
-            }),*/
-            new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    givenName: user.firstName.toString()
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    sn: user.lastName.toString(),
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    displayName: `${user.firstName} ${user.lastName}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    mail:  `${user.email}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    title:  `${user.employment}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    userWorkstations:  `${user.workstations}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    telephoneNumber:  `${user.phoneNumber}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    streetAddress:  `${user.streetAddress}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    company:  `${user.company}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    department:  `${user.department}`,
-                }
-            }), new ldap.Change({
-                operation: 'replace',
-                modification: {
-                    description:  `${user.rut}`,
-                }
-            })
-        ], (err) => {
+        console.log(userCurrent);
+        let arrayFields = [new ldap.Change({
+            operation: 'replace',
+            modification: {
+                givenName: user.firstName.toString()
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                sn: user.lastName.toString(),
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                displayName: `${user.firstName} ${user.lastName}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                mail: `${user.email}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                title: `${user.employment}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                userWorkstations: `${user.workstations}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                telephoneNumber: `${user.phoneNumber}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                streetAddress: `${user.streetAddress}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                company: `${user.company}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                department: `${user.department}`,
+            }
+        }), new ldap.Change({
+            operation: 'replace',
+            modification: {
+                description: `${user.rut}`,
+            }
+        })]
+
+        client.modify(userCurrent.dn, arrayFields, async (err) => {
             if (err) {
                 console.log("err in update user " + err);
                 reject(err);
             } else {
                 console.log("add update user");
+                await removeUserGroup(user.username);
+                await addUserGroup(user.username, user.groups);
                 resolve(true);
             }
         });
@@ -332,6 +344,66 @@ async function deleteUser(username) {
 
 }
 
+async function removeUserGroup(username) {
+    return new Promise(async (resolve, reject) => {
+        let userCurrent = await getUserBysAMAccountName(username);
+        if (userCurrent.memberOf) {
+            let arrayGroupsDelete = [];
+            let change = new ldap.Change({
+                operation: 'delete',
+                modification: {
+                    member: [userCurrent.dn]
+                }
+            })
+            if (typeof userCurrent.memberOf === 'string') {
+                arrayGroupsDelete.push(client.modify(userCurrent.memberOf, change, function (err, res) {
+                }))
+            } else {
+                userCurrent.memberOf.map(group => {
+                    arrayGroupsDelete.push(client.modify(group, change, function (err, res) {
+                    }))
+                })
+            }
+            Promise.all(arrayGroupsDelete).then((response) => {
+                console.log(response);
+                resolve(true);
+            }).catch((error) => {
+                reject(false);
+            })
+        } else {
+            resolve(true);
+        }
+
+    })
+}
+
+async function addUserGroup(username, groups) {
+    return new Promise(async (resolve, reject) => {
+        let userCurrent = await getUserBysAMAccountName(username);
+        let arrayAddGroups = [];
+        let change = new ldap.Change({
+            operation: 'add',
+            modification: {
+                member: [userCurrent.dn]
+            }
+        });
+        groups.map(group => {
+            arrayAddGroups.push(client.modify('CN=' + group + ',OU=web,OU=Grupos_,DC=ecomsur,DC=cl', change, function (err, res) {
+            }))
+        })
+
+        Promise.all(groups)
+            .then(res => {
+                console.log(res);
+                resolve(true)
+            })
+            .catch(err => {
+                console.log(err);
+                reject(false);
+            })
+    })
+}
+
 function encodePassword(password) {
     var convertedPassword = ''
     password = '"' + password + '"'
@@ -346,5 +418,58 @@ function encodePassword(password) {
     return convertedPassword
 }
 
+async function getAllGroup() {
+    let arrayGroups = [];
+    return new Promise(async (resolve, reject) => {
+        try {
+            var opts = {
+                filter: "(objectClass=*)",
+                scope: "sub",
+                attributes: [
+                    "name"
+                ],
+            };
+            client.search(
+                process.env.OUGROUPS,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", function (entry) {
+                            if (entry.object.dn.includes('CN')) {
+                                // console.log("entry : " + JSON.stringify(entry.object));
+                                console.log(entry.object.name);
+                                arrayGroups.push(entry.object.name);
+                            }
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                client.destroy()
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(arrayGroups);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                }
+            )
 
-module.exports = {autenticate, getAllUsers, getUserBysAMAccountName, addUser, updateUser, deleteUser}
+        } catch (e) {
+            reject(e)
+        }
+
+    });
+}
+
+
+module.exports = {autenticate, getAllUsers, getUserBysAMAccountName, addUser, updateUser, deleteUser, getAllGroup}
