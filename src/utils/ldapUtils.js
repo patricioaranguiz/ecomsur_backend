@@ -1,7 +1,7 @@
 const ldap = require("ldapjs");
 const fs = require("fs");
 const ldapOptions = {
-    url: ["ldap://192.168.0.7:389"],
+    url: ["ldap://" + process.env.IPLDAP],
     bindDN: "ecomsur.cl",
     reconnect: true,
     idleTimeout: 3000,
@@ -96,7 +96,6 @@ async function getAllUsers() {
                     "mail",
                     "sAMAccountName",
                     "title",
-                    "userWorkstations",
                     "telephoneNumber",
                     "streetAddress",
                     "company",
@@ -125,7 +124,6 @@ async function getAllUsers() {
                                     groups: arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
                                     mail: entry.object.mail,
                                     title: entry.object.title,
-                                    workstations: entry.object.userWorkstations,
                                     telephoneNumber: entry.object.telephoneNumber,
                                     streetAddress: entry.object.streetAddress,
                                     company: entry.object.company,
@@ -214,10 +212,10 @@ async function addUser(user) {
             // userPrincipalName: `${user.username}@${process.env.DOMAIN}`,
             sAMAccountName: user.username.toString(),
             objectClass: ['top', 'person', 'organizationalPerson', 'user'],
-            // userPassword: encodePassword('Qwer1234.'),
+            userPassword: encodePassword('QwQw1234.'),
             userAccountControl: '544',
             title: user.employment.toString(),
-            userWorkstations: user.workstations.toString(),
+            // userWorkstations: user.workstations.toString(),
             telephoneNumber: parseInt(user.phoneNumber),
             streetAddress: user.streetAddress.toString(),
             company: user.company.toString(),
@@ -278,11 +276,6 @@ async function updateUser(user) {
             operation: 'replace',
             modification: {
                 title: `${user.employment}`,
-            }
-        }), new ldap.Change({
-            operation: 'replace',
-            modification: {
-                userWorkstations: `${user.workstations}`,
             }
         }), new ldap.Change({
             operation: 'replace',
