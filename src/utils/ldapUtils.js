@@ -388,7 +388,7 @@ async function addUserGroup(username, groups) {
             }
         });
         groups.map(group => {
-            arrayAddGroups.push(client.modify('CN=' + group + ',OU=web,OU=Grupos_,DC=ecomsur,DC=cl', change, function (err, res) {
+            arrayAddGroups.push(client.modify('CN=' + group + ',' + process.env.OUGROUPS, change, function (err, res) {
             }))
         })
 
@@ -426,7 +426,7 @@ async function getAllGroup() {
                 filter: "(objectClass=*)",
                 scope: "sub",
                 attributes: [
-                    "name"
+                    "name", "member"
                 ],
             };
             client.search(
@@ -439,8 +439,7 @@ async function getAllGroup() {
                     } else {
                         res.on("searchEntry", function (entry) {
                             if (entry.object.dn.includes('CN')) {
-                                // console.log("entry : " + JSON.stringify(entry.object));
-                                console.log(entry.object.name);
+                                console.log("entry : " + JSON.stringify(entry.object));
                                 arrayGroups.push(entry.object.name);
                             }
                         });
@@ -471,5 +470,63 @@ async function getAllGroup() {
     });
 }
 
+async function getAllGroupAndMember() {
+    let arrayGroups = [];
+    return new Promise(async (resolve, reject) => {
+        try {
+            var opts = {
+                filter: "(objectClass=*)",
+                scope: "sub",
+                attributes: [
+                    "name", "member"
+                ],
+            };
+            client.search(
+                process.env.OUGROUPS,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", function (entry) {
+                            if (entry.object.dn.includes('CN')) {
+                                console.log("entry : " + JSON.stringify(entry.object));
+                                let memberCount = entry.object.member === '' ? 0 : (typeof entry.object.member === 'string' ? 1 : entry.object.member.length)
 
-module.exports = {autenticate, getAllUsers, getUserBysAMAccountName, addUser, updateUser, deleteUser, getAllGroup}
+                                arrayGroups.push(
+                                    {
+                                        group: entry.object.name,
+                                        count: memberCount
+                                    });
+                            }
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                client.destroy()
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(arrayGroups);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                }
+            )
+
+        } catch (e) {
+            reject(e)
+        }
+
+    });
+}
+
+
+module.exports = {autenticate, getAllUsers, getUserBysAMAccountName, addUser, updateUser, deleteUser, getAllGroup, getAllGroupAndMember}

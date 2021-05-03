@@ -11,6 +11,8 @@ app.use(cors())
 const port = process.env.PORT || 3000;
 app.use('/api', require('./src/routes/index'))
 
+app.use('/api/charts', require('./src/routes/charts'));
+
 app.get('/', function (req, res) {
   res.send("Hola mundo");
 })
