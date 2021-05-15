@@ -551,6 +551,71 @@ async function changeUserDn(userCurrent) {
     })
 }
 
+async function getAllComputers() {
+
+    return new Promise(async (resolve, reject) => {
+        try {
+            await autenticate({username: 'jetorres', password: 'Qwer1234.'})
+            var opts = {
+                filter: "(objectClass=*)",
+                scope: "sub",
+                attributes: [
+                    "distinguishedName",
+                    "cn",
+                    "givenName",
+                    "sn",
+                    "displayName",
+                    "mail",
+                    "sAMAccountName",
+                    "title",
+                    "telephoneNumber",
+                    "streetAddress",
+                    "company",
+                    "department",
+                    "description",
+                    "memberOf"
+                ],
+            };
+            client.search(
+                'CN=Computers,DC=ecomsur,DC=cl',
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", function (entry) {
+                            console.log("entry : " + JSON.stringify(entry.object));
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                client.destroy()
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(true);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                }
+            )
+        }
+        catch (e) {
+            reject(e)
+        }
+
+    });
+
+
+}
+
 
 module.exports = {
     autenticate,
@@ -561,5 +626,6 @@ module.exports = {
     deleteUser,
     getAllGroup,
     getAllGroupAndMember,
-    changeUserDn
+    changeUserDn,
+    getAllComputers
 }
