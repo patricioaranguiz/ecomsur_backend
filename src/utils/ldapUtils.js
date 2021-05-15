@@ -173,6 +173,7 @@ async function getUserBysAMAccountName(sAMAccountName) {
                     reject(err);
                 } else {
                     res.on("searchEntry", function (entry) {
+                        console.log(entry.object);
                         if (entry.object.sAMAccountName) {
                             let arrayGrupos = entry.object.memberOf ? typeof entry.object.memberOf === "object" ? entry.object.memberOf : [entry.object.memberOf] : []
                             user = {
@@ -321,12 +322,25 @@ async function updateUser(user) {
 async function deleteUser(username) {
     return new Promise(async (resolve, reject) => {
         try {
-            let userInfo = await getUserBysAMAccountName(username);
-            client.del(userInfo.dn, (err) => {
+            let userCurrent = await getUserBysAMAccountName(username);
+            console.log(userCurrent);
+            console.log(`cn=${userCurrent.nombreCompleto},${process.env.OUDELETE}`)
+
+            // Se modifica la cuenta dejandola deshabilitada
+            client.modify(userCurrent.dn, [
+                new ldap.Change({
+                    operation: 'replace',
+                    modification: {
+                        userAccountControl: 2
+                    }
+                })], async (err) => {
                 if (err) {
-                    reject(err)
+                    console.log("err in update user " + err);
+                    reject(err);
                 } else {
-                    resolve(true)
+                    console.log("add update user");
+                    await changeUserDn(userCurrent);
+                    resolve(true);
                 }
             });
         } catch (e) {
@@ -521,5 +535,31 @@ async function getAllGroupAndMember() {
     });
 }
 
+async function changeUserDn(userCurrent) {
+    return new Promise((resolve, reject) => {
+        try {
+            client.modifyDN(userCurrent.dn, `cn=${userCurrent.nombreCompleto},${process.env.OUDELETE}`, (err) => {
+                if (err) {
+                    console.log(err)
+                    reject(err)
+                }
+                resolve(true)
+            });
+        } catch (e) {
+            reject(e)
+        }
+    })
+}
 
-module.exports = {autenticate, getAllUsers, getUserBysAMAccountName, addUser, updateUser, deleteUser, getAllGroup, getAllGroupAndMember}
+
+module.exports = {
+    autenticate,
+    getAllUsers,
+    getUserBysAMAccountName,
+    addUser,
+    updateUser,
+    deleteUser,
+    getAllGroup,
+    getAllGroupAndMember,
+    changeUserDn
+}
