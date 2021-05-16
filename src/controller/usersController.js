@@ -91,19 +91,25 @@ exports.addUserMassive = async function (req, res) {
                 .pipe(csv())
                 .on('data', (data) => results.push(data))
                 .on('end', async () => {
-                    await autenticate({username: 'jetorres', password: 'Qwer1234.'})
                     await Promise.all(results.map(async item => {
                         let exist = await getUserBysAMAccountName(item.username);
+                        console.log(exist);
                         if (!exist.dn) {
                             item.groups = item.groups.split(" ");
-                            await addUser(item)
+                            try {
+                                await addUser(item)
+                            } catch (e) {
+                                console.log(item.username)
+                                console.log(e);
+                            }
                         }
                     }));
-                    fs.unlinkSync(req.files.file.name)
+                    fs.unlinkSync(req.files.file.name);
                     res.status(200).send(true)
                 });
         })
     } catch (e) {
+        fs.unlinkSync(req.files.file.name);
         console.log(e);
         res.status(500).send(e);
     }
