@@ -551,6 +551,111 @@ async function changeUserDn(userCurrent) {
     })
 }
 
+async function getDepartments() {
+    let arrayDepartment = [];
+    return new Promise(async (resolve, reject) => {
+        try {
+
+            await autenticate({username: 'jetorres', password: 'Qwer1234.'})
+            var opts = {
+                filter: "(objectClass=organizationalUnit)",
+                scope: "sub",
+                attributes: [
+                    "name",
+                    "dn"
+                ]
+
+            };
+            client.search(
+                process.env.OUUSERS,
+                opts,
+                async function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", async function (entry) {
+                            if (process.env.OUUSERS !== entry.object.dn) {
+                                // let ok = await getCountMemberOfDepartment(entry.object.dn)
+                                arrayDepartment.push(
+                                    {
+                                        name: entry.object.name,
+                                        dn: entry.object.dn
+                                    }
+                                )
+                            }
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: => " + result.status);
+                            resolve(arrayDepartment);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                })
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+async function getCountMemberOfDepartment(department) {
+
+    return new Promise((resolve, reject) => {
+        try {
+            var opts = {
+                filter: "(objectClass=organizationalPerson)",
+                scope: "sub",
+                attributes: [
+                    "name",
+                    "dn"
+                ]
+
+            };
+            client.search(department,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        let count = 0;
+                        res.on("searchEntry", function (entry) {
+                            count++;
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(count);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                })
+
+        } catch (e) {
+            console.log(e)
+            reject(e)
+        }
+    })
+}
 async function getAllSoOfComputers() {
 
     return new Promise(async (resolve, reject) => {
@@ -675,6 +780,8 @@ module.exports = {
     getAllGroup,
     getAllGroupAndMember,
     changeUserDn,
+    getDepartments,
+    getCountMemberOfDepartment,
     getAllSoOfComputers,
     getCountComputersOfSo
 }
