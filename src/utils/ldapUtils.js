@@ -656,6 +656,119 @@ async function getCountMemberOfDepartment(department) {
         }
     })
 }
+async function getAllSoOfComputers() {
+
+    return new Promise(async (resolve, reject) => {
+        try {
+            // await autenticate({username: 'jetorres', password: 'Qwer1234.'})
+            const namesOfSo = [];
+            var opts = {
+                // filter: "(operatingSystem=Windows 7 Professional)",
+                filter: "(objectClass=computer)",
+                scope: "sub",
+                attributes: [
+                    "operatingSystem"
+                ],
+            };
+            client.search(
+                process.env.OUCOMPUTERS,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", function (entry) {
+                            if (entry.object.dn !== process.env.OUCOMPUTERS) {
+                                const copy = Object.assign({}, entry.object);
+                                if (copy.operatingSystem) {
+                                    if (namesOfSo.length === 0) {
+                                        namesOfSo.push(copy.operatingSystem)
+                                    } else {
+                                        if (!namesOfSo.includes(copy.operatingSystem)){
+                                            namesOfSo.push(copy.operatingSystem)
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            console.log(namesOfSo)
+                            resolve(namesOfSo);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                }
+            )
+        }
+        catch (e) {
+            reject(e)
+        }
+
+    });
+
+
+}
+
+async function getCountComputersOfSo(SO) {
+    return new Promise((resolve, reject) => {
+        try {
+            var opts = {
+                filter: "(operatingSystem=" + SO +")",
+                scope: "sub",
+                // attributes: [
+                //     "operatingSystem"
+                // ],
+            };
+            client.search(
+                process.env.OUCOMPUTERS,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        let countComputers = 0;
+                        res.on("searchEntry", function (entry) {
+                            countComputers++;
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                client.destroy()
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(countComputers);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                }
+            )
+        }
+        catch (e) {
+            reject(e);
+        }
+    })
+}
+
 
 module.exports = {
     autenticate,
@@ -668,5 +781,7 @@ module.exports = {
     getAllGroupAndMember,
     changeUserDn,
     getDepartments,
-    getCountMemberOfDepartment
+    getCountMemberOfDepartment,
+    getAllSoOfComputers,
+    getCountComputersOfSo
 }

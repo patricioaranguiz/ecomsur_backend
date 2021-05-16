@@ -55,6 +55,7 @@ exports.updateUser = async function (req, res) {
 
 exports.addUser = async function (req, res) {
     try {
+        await jwtVerify(req.headers.authorization);
         await addUser(req.body);
         res.status(200).send(true);
     } catch (e) {
@@ -67,6 +68,7 @@ exports.addUser = async function (req, res) {
 }
 exports.deleteUser = async function (req, res) {
     try {
+        await jwtVerify(req.headers.authorization);
         await deleteUser(req.params.username);
         res.status(200).send(true);
     } catch (e) {
