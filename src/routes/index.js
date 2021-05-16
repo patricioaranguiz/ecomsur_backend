@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const UsersController = require('../controller/usersController')
@@ -18,7 +19,7 @@ router.delete('/user/:username', UsersController.deleteUser)
 
 router.get('/groups', GroupsController.getGroups);
 
-
+router.post('/user/massive', UsersController.addUserMassive)
 
 
 module.exports = router;

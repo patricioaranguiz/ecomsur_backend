@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fileUpload = require('express-fileupload');
 const cors = require('cors')
 const express = require('express');
 const app = express();
@@ -8,6 +9,7 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 app.use(cors())
+app.use(fileUpload());
 const port = process.env.PORT || 3000;
 app.use('/api', require('./src/routes/index'))
 

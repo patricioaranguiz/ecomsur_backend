@@ -173,7 +173,6 @@ async function getUserBysAMAccountName(sAMAccountName) {
                     reject(err);
                 } else {
                     res.on("searchEntry", function (entry) {
-                        console.log(entry.object);
                         if (entry.object.sAMAccountName) {
                             let arrayGrupos = entry.object.memberOf ? typeof entry.object.memberOf === "object" ? entry.object.memberOf : [entry.object.memberOf] : []
                             user = {
