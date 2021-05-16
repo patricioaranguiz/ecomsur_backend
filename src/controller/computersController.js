@@ -1,11 +1,17 @@
 const {jwtSign, jwtVerify} = require('../utils/jwtUtils')
-const { getAllComputers }  = require('../utils/ldapUtils');
+const { getAllSoOfComputers, getCountComputersOfSo}  = require('../utils/ldapUtils');
 
 
 exports.getAllComputers = async function(req, res) {
     try {
-        // await jwtVerify(req.headers.authorization);
-        let response = await getAllComputers()
+        await jwtVerify(req.headers.authorization);
+        let response = await getAllSoOfComputers()
+        response = await Promise.all(response.map(async item => {
+            return {
+                name: item,
+                count: await getCountComputersOfSo(item)
+            }
+        }))
         res.status(200).json(response);
     } catch (e) {
         if (e.code) {
