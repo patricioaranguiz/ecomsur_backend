@@ -334,10 +334,10 @@ async function deleteUser(username) {
                     }
                 })], async (err) => {
                 if (err) {
-                    console.log("err in update user " + err);
+                    console.log("err in delete user " + err);
                     reject(err);
                 } else {
-                    console.log("add update user");
+                    console.log("delete user ok");
                     await changeUserDn(userCurrent);
                     resolve(true);
                 }
