@@ -75,13 +75,17 @@ exports.deleteUser = async function (req, res) {
         await deleteUser(req.params.username);
         res.status(200).send(true);
     } catch (e) {
-        console.log(e);
-        res.status(500).send(e);
+        if (e.code) {
+            res.status(e.code).send(e.message);
+        } else {
+            res.status(500).send('Ocurrio un error');
+        }
     }
 }
 
 exports.addUserMassive = async function (req, res) {
     try {
+        await jwtVerify(req.headers.authorization);
         fs.writeFile(req.files.file.name, req.files.file.data, function (err) {
             if (err) {
                 console.log(err)
@@ -110,7 +114,48 @@ exports.addUserMassive = async function (req, res) {
         })
     } catch (e) {
         fs.unlinkSync(req.files.file.name);
-        console.log(e);
-        res.status(500).send(e);
+        if (e.code) {
+            res.status(e.code).send(e.message);
+        } else {
+            res.status(500).send('Ocurrio un error');
+        }
+    }
+}
+
+exports.deleteUserMassive = async function (req, res) {
+    try {
+        // await jwtVerify(req.headers.authorization);
+        fs.writeFile(req.files.file.name, req.files.file.data, function (err) {
+            if (err) {
+                console.log(err)
+            }
+            const results = [];
+            fs.createReadStream(req.files.file.name)
+                .pipe(csv())
+                .on('data', (data) => results.push(data))
+                .on('end', async () => {
+                    await Promise.all(results.map(async item => {
+                        let exist = await getUserBysAMAccountName(item.username);
+                        console.log(exist);
+                        if (exist.dn) {
+                            try {
+                                await deleteUser(item.username);
+                            } catch (e) {
+                                console.log(item.username)
+                                console.log(e);
+                            }
+                        }
+                    }));
+                    fs.unlinkSync(req.files.file.name);
+                    res.status(200).send(true)
+                });
+        })
+    } catch (e) {
+        fs.unlinkSync(req.files.file.name);
+        if (e.code) {
+            res.status(e.code).send(e.message);
+        } else {
+            res.status(500).send('Ocurrio un error');
+        }
     }
 }
