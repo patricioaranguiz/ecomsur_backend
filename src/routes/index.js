@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const UsersController = require('../controller/usersController')
-
+const DepartmentsController = require('../controller/departmentsController')
 const GroupsController = require('../controller/groupsController')
 
 
@@ -14,6 +14,7 @@ router.post('/user', UsersController.addUser);
 router.delete('/user/:username', UsersController.deleteUser)
 
 router.get('/groups', GroupsController.getGroups);
+router.get('/departments', DepartmentsController.getDepartments);
 
 router.post('/user/massive/add', UsersController.addUserMassive)
 router.post('/user/massive/edit', UsersController.editUserMassive)

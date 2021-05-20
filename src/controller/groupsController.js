@@ -38,7 +38,7 @@ exports.getAllGroupsAndMember = async function(req, res) {
 
 exports.getMemberOfDepartment = async function(req, res) {
     try {
-        // await jwtVerify(req.headers.authorization);
+        await jwtVerify(req.headers.authorization);
         let response = await getDepartments()
         response = await Promise.all(response.map(async (item) => {
             return {name: item.name, count: await getCountMemberOfDepartment(item.dn)};

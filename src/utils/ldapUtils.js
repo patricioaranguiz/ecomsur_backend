@@ -198,11 +198,10 @@ async function getUserBysAMAccountName(sAMAccountName) {
 }
 
 async function addUser(user) {
-    console.log(user);
     return new Promise(async (resolve, reject) => {
-        var newDN = `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`;
+        var newDN = `cn=${user.firstName} ${user.lastName},OU=${user.department.toString()},${process.env.OUUSERS}`;
         var newUser = {
-            distinguishedName: `cn=${user.firstName} ${user.lastName},${process.env.OUUSERS}`,
+            distinguishedName: `cn=${user.firstName} ${user.lastName},OU=${user.department.toString()},${process.env.OUUSERS}`,
             cn: `${user.firstName} ${user.lastName}`,
             givenName: user.firstName.toString(),
             sn: user.lastName.toString(),
@@ -312,6 +311,7 @@ async function updateUser(user) {
                 console.log("add update user");
                 await removeUserGroup(user.username);
                 await addUserGroup(user.username, user.groups);
+                await changeUserDn(userCurrent,  `OU=${user.department},${process.env.OUUSERS}`);
                 resolve(true);
             }
         });
@@ -338,7 +338,7 @@ async function deleteUser(username) {
                     reject(err);
                 } else {
                     console.log("delete user ok");
-                    await changeUserDn(userCurrent);
+                    await changeUserDn(userCurrent, process.env.OUDELETE);
                     resolve(true);
                 }
             });
@@ -534,10 +534,10 @@ async function getAllGroupAndMember() {
     });
 }
 
-async function changeUserDn(userCurrent) {
+async function changeUserDn(userCurrent, OU) {
     return new Promise((resolve, reject) => {
         try {
-            client.modifyDN(userCurrent.dn, `cn=${userCurrent.nombreCompleto},${process.env.OUDELETE}`, (err) => {
+            client.modifyDN(userCurrent.dn, `cn=${userCurrent.nombreCompleto},${OU}`, (err) => {
                 if (err) {
                     console.log(err)
                     reject(err)
