@@ -8,7 +8,7 @@ const ldapOptions = {
 };
 
 var tlsOptions = {
-    host: '192.168.0.7',
+    host: '192.168.0.20',
     port: '636',
     ca: [fs.readFileSync(__dirname + '/ldaps636.cer')],
     rejectUnauthorized: false
@@ -554,8 +554,6 @@ async function getDepartments() {
     let arrayDepartment = [];
     return new Promise(async (resolve, reject) => {
         try {
-
-            await autenticate({username: 'jetorres', password: 'Qwer1234.'})
             var opts = {
                 filter: "(objectClass=organizationalUnit)",
                 scope: "sub",
@@ -659,7 +657,6 @@ async function getAllSoOfComputers() {
 
     return new Promise(async (resolve, reject) => {
         try {
-            // await autenticate({username: 'jetorres', password: 'Qwer1234.'})
             const namesOfSo = [];
             var opts = {
                 // filter: "(operatingSystem=Windows 7 Professional)",

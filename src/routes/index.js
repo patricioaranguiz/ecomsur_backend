@@ -16,6 +16,7 @@ router.delete('/user/:username', UsersController.deleteUser)
 router.get('/groups', GroupsController.getGroups);
 
 router.post('/user/massive/add', UsersController.addUserMassive)
+router.post('/user/massive/edit', UsersController.editUserMassive)
 router.post('/user/massive/delete', UsersController.deleteUserMassive)
 
 
