@@ -5,7 +5,8 @@ const {
     getUserBysAMAccountName,
     addUser,
     deleteUser,
-    updateUser
+    updateUser,
+    changePassword
 } = require('../utils/ldapUtils')
 
 const csv = require('csv-parser')
@@ -20,7 +21,8 @@ exports.login = async function (req, res) {
         res.status(200).json({
             nombreUsuario: user.nombreCompleto,
             role: user.role,
-            token
+            token,
+            username: req.body.username
         });
     } catch (e) {
         res.status(500).send(e);
@@ -45,13 +47,13 @@ exports.updateUser = async function (req, res) {
     try {
         await jwtVerify(req.headers.authorization);
         const body = req.body;
-        const users = await updateUser(body)
+        const users = await updateUser(body, req.headers.username)
         res.status(200).json(users)
     } catch (e) {
         if (e.code) {
-            res.status(e.code).send(e.message);
+            res.status(e.code).json(e.message);
         } else {
-            res.status(500).send('Ocurrio un error');
+            res.status(500).json('Ocurrio un error');
         }
     }
 }
@@ -59,7 +61,7 @@ exports.updateUser = async function (req, res) {
 exports.addUser = async function (req, res) {
     try {
         await jwtVerify(req.headers.authorization);
-        await addUser(req.body);
+        await addUser(req.body, req.headers.username);
         res.status(200).send(true);
     } catch (e) {
         if (e.code) {
@@ -72,7 +74,7 @@ exports.addUser = async function (req, res) {
 exports.deleteUser = async function (req, res) {
     try {
         await jwtVerify(req.headers.authorization);
-        await deleteUser(req.params.username);
+        await deleteUser(req.params.username, req.headers.username);
         res.status(200).send(true);
     } catch (e) {
         if (e.code) {
@@ -101,7 +103,7 @@ exports.addUserMassive = async function (req, res) {
                         if (!exist.dn) {
                             item.groups = item.groups.split(" ");
                             try {
-                                await addUser(item)
+                                await addUser(item, req.headers.username)
                             } catch (e) {
                                 console.log(item.username)
                                 console.log(e);
@@ -140,7 +142,7 @@ exports.editUserMassive = async function (req, res) {
                         if (exist.dn) {
                             item.groups = item.groups.split(" ");
                             try {
-                                await updateUser(item);
+                                await updateUser(item, req.headers.username);
                             } catch (e) {
                                 console.log(item.username)
                                 console.log(e);
@@ -164,7 +166,7 @@ exports.editUserMassive = async function (req, res) {
 
 exports.deleteUserMassive = async function (req, res) {
     try {
-        // await jwtVerify(req.headers.authorization);
+        await jwtVerify(req.headers.authorization);
         fs.writeFile(req.files.file.name, req.files.file.data, function (err) {
             if (err) {
                 console.log(err)
@@ -179,7 +181,7 @@ exports.deleteUserMassive = async function (req, res) {
                         console.log(exist);
                         if (exist.dn) {
                             try {
-                                await deleteUser(item.username);
+                                await deleteUser(item.username, req.headers.username);
                             } catch (e) {
                                 console.log(item.username)
                                 console.log(e);
@@ -192,6 +194,21 @@ exports.deleteUserMassive = async function (req, res) {
         })
     } catch (e) {
         fs.unlinkSync(req.files.file.name);
+        if (e.code) {
+            res.status(e.code).send(e.message);
+        } else {
+            res.status(500).send('Ocurrio un error');
+        }
+    }
+}
+
+exports.changePassword = async function(req, res) {
+    try {
+        await jwtVerify(req.headers.authorization);
+        let username = req.body.username;
+        let password = await changePassword(username, req.headers.username)
+        res.status(200).json(password)
+    } catch (e) {
         if (e.code) {
             res.status(e.code).send(e.message);
         } else {

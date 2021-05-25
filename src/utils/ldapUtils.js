@@ -1,11 +1,13 @@
+const sequelize = require('./config-mysql').sequelize;
+const Logs = require('../models/logs');
 const ldap = require("ldapjs");
 const fs = require("fs");
-const ldapOptions = {
-    url: ["ldap://" + process.env.IPLDAP],
-    bindDN: "ecomsur.cl",
-    reconnect: true,
-    idleTimeout: 3000,
-};
+// const ldapOptions = {
+//     url: ["ldap://" + process.env.IPLDAP],
+//     bindDN: "ecomsur.cl",
+//     reconnect: true,
+//     idleTimeout: 3000,
+// };
 
 var tlsOptions = {
     host: '192.168.0.20',
@@ -22,7 +24,21 @@ var tlsOptions = {
     tlsOptions: tlsOptions
 };*/
 
+const acciones = {
+    LOGIN: "LOGIN",
+    CREAR: "CREAR_USUARIO",
+    EDITAR: "EDITAR_USUARIO",
+    ELIMINAR: "ELIMINA_USUARIO",
+    CAMBIO_CLAVE: "CAMBIO_CLAVE",
+}
 
+const ldapOptions = {
+    url: ["ldaps://192.168.0.20"],
+    bindDN: "ecomsur.cl",
+    reconnect: true,
+    idleTimeout: 3000,
+    tlsOptions: {'rejectUnauthorized': false}
+};
 let client = ldap.createClient(ldapOptions);
 client.on("error", function (err) {
     console.warn(
@@ -49,6 +65,7 @@ async function connect() {
  *
  */
 async function autenticate(user) {
+    let transaction = await sequelize.transaction();
     return new Promise(async (resolve, reject) => {
         try {
             console.log(client.connected)
@@ -67,11 +84,19 @@ async function autenticate(user) {
                             reject(err);
                         }
                     } else {
+                        await Logs.create({
+                            username: user.username,
+                            accion: acciones.LOGIN,
+                            detalle: 'Usuario autenticado',
+                            fecha: Date.now()
+                        }, {transaction})
+                        await transaction.commit();
                         resolve(client)
                     }
                 }
             )
         } catch (e) {
+            await transaction.rollback();
             console.log(e);
             reject(e);
         }
@@ -167,7 +192,7 @@ async function getUserBysAMAccountName(sAMAccountName) {
             scope: "sub",
             attributes: ["cn", "sAMAccountName", "memberOf"],
         };
-        client.search("OU=Usuarios_,DC=ecomsur,DC=cl", opts, function (err, res) {
+        client.search(process.env.OUUSERS, opts, function (err, res) {
                 if (err) {
                     console.log("Error in search " + err);
                     reject(err);
@@ -178,7 +203,7 @@ async function getUserBysAMAccountName(sAMAccountName) {
                             user = {
                                 dn: entry.object.dn,
                                 nombreCompleto: entry.object.cn,
-                                userName: entry.object.sAMAccountName,
+                                username: entry.object.sAMAccountName,
                                 memberOf: entry.object.memberOf,
                                 role: arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
                             };
@@ -197,7 +222,54 @@ async function getUserBysAMAccountName(sAMAccountName) {
     });
 }
 
-async function addUser(user) {
+async function getUserByUsername(username) {
+    let user = {};
+    return new Promise((resolve, reject) => {
+        var opts = {
+            filter: "(sAMAccountName=" + username + ")",
+            scope: "sub",
+            attributes: ["cn", "sAMAccountName", "memberOf", "givenName", "sn", "mail", "title", "telephoneNumber", "streetAddress", "company", "department", "description"],
+        };
+        client.search(process.env.OUUSERS, opts, function (err, res) {
+                if (err) {
+                    console.log("Error in search " + err);
+                    reject(err);
+                } else {
+                    res.on("searchEntry", function (entry) {
+                        if (entry.object.sAMAccountName) {
+                            let arrayGrupos = entry.object.memberOf ? typeof entry.object.memberOf === "object" ? entry.object.memberOf : [entry.object.memberOf] : []
+                            user = {
+                                "username": username,
+                                "firstName": entry.object.givenName,
+                                "lastName": entry.object.sn,
+                                "email": entry.object.mail,
+                                "rut": entry.object.description,
+                                "employment": entry.object.title,
+                                "department": entry.object.department,
+                                "company": entry.object.company,
+                                "streetAddress": entry.object.streetAddress,
+                                "phoneNumber": entry.object.telephoneNumber,
+                                "groups": arrayGrupos.length > 0 ? (arrayGrupos.map((item) => item.toString().split(",")[0].replace("CN=", ""))) : '',
+                            }
+                        }
+                    });
+                    res.on("error", function (err) {
+                        console.error("error: " + err.message);
+                        reject(err);
+                    });
+                    res.on("end", function (result) {
+                        resolve(user);
+                    });
+                }
+            }
+        );
+    });
+}
+
+async function addUser(user, actionUser) {
+    let transaction = await sequelize.transaction();
+    let yearCurrent = new Date().getFullYear().toString();
+    let test = user.username.charAt(0).toUpperCase() + user.username.slice(1);
     return new Promise(async (resolve, reject) => {
         var newDN = `cn=${user.firstName} ${user.lastName},OU=${user.department.toString()},${process.env.OUUSERS}`;
         var newUser = {
@@ -211,7 +283,7 @@ async function addUser(user) {
             // userPrincipalName: `${user.username}@${process.env.DOMAIN}`,
             sAMAccountName: user.username.toString(),
             objectClass: ['top', 'person', 'organizationalPerson', 'user'],
-            userPassword: encodePassword('QwQw1234.'),
+            unicodePwd: encodePassword(`${test}${yearCurrent}.`),
             userAccountControl: '544',
             title: user.employment.toString(),
             // userWorkstations: user.workstations.toString(),
@@ -221,35 +293,51 @@ async function addUser(user) {
             department: user.department.toString(),
             description: user.rut.toString()
         }
-        client.add(newDN, newUser, async function (err) {
-            if (err) {
-                console.log("err in new user " + err);
-                if (JSON.stringify(err.lde_message).includes("DSID-0C090FC5")) {
-                    client.destroy()
-                    reject({code: 403, message: "Credenciales Invalidas"});
-                } else if (JSON.stringify(err.lde_message).includes("ENTRY_EXISTS")) {
-                    reject({code: 409, message: "Usuario existente"})
+
+        try {
+            client.add(newDN, newUser, async function (err) {
+                if (err) {
+                    console.log("err in new user " + err);
+                    if (JSON.stringify(err.lde_message).includes("DSID-0C090FC5")) {
+                        client.destroy()
+                        reject({code: 403, message: "Credenciales Invalidas"});
+                    } else if (JSON.stringify(err.lde_message).includes("ENTRY_EXISTS")) {
+                        reject({code: 409, message: "Usuario existente"})
+                    } else {
+                        reject(err);
+                    }
                 } else {
-                    reject(err);
+                    console.log("added user")
+                    await removeUserGroup(user.username);
+                    await addUserGroup(user.username, user.groups);
+                    await Logs.create({
+                        username: actionUser,
+                        accion: acciones.CREAR,
+                        detalle: 'Se ha agregado un nuevo usuario: ' + user.username,
+                        valorNuevo: JSON.stringify(newUser),
+                        fecha: Date.now()
+                    })
+
+                    await transaction.commit();
+                    resolve(true);
                 }
-            } else {
-                console.log("added user")
-                await removeUserGroup(user.username);
-                await addUserGroup(user.username, user.groups);
-                resolve(true);
-            }
-        });
-
-
+            });
+        } catch (e) {
+            await transaction.rollback();
+            console.log(e);
+            reject(e);
+        }
     })
 }
 
-async function updateUser(user) {
+async function updateUser(user, actionUser) {
+    let transaction = await sequelize.transaction();
     console.log(user);
     let arrayGroupsDelete = [];
     let arrayGroupAdd = [];
     return new Promise(async (resolve, reject) => {
         let userCurrent = await getUserBysAMAccountName(user.username);
+        let current = await getUserByUsername(user.username);
         console.log(userCurrent);
         let arrayFields = [new ldap.Change({
             operation: 'replace',
@@ -303,22 +391,39 @@ async function updateUser(user) {
             }
         })]
 
-        client.modify(userCurrent.dn, arrayFields, async (err) => {
-            if (err) {
-                console.log("err in update user " + err);
-                reject(err);
-            } else {
-                console.log("add update user");
-                await removeUserGroup(user.username);
-                await addUserGroup(user.username, user.groups);
-                await changeUserDn(userCurrent,  `OU=${user.department},${process.env.OUUSERS}`);
-                resolve(true);
-            }
-        });
+        try {
+            client.modify(userCurrent.dn, arrayFields, async (err) => {
+                if (err) {
+                    console.log("err in update user " + err);
+                    reject(err);
+                } else {
+                    console.log("update user");
+                    await removeUserGroup(user.username);
+                    await addUserGroup(user.username, user.groups);
+                    await changeUserDn(userCurrent, `OU=${user.department},${process.env.OUUSERS}`);
+                    console.log(userCurrent);
+                    await Logs.create({
+                        username: actionUser,
+                        accion: acciones.EDITAR,
+                        detalle: 'Se ha actualizado el usuario: ' + user.username,
+                        valorActual: JSON.stringify(current),
+                        valorNuevo: JSON.stringify(user),
+                        fecha: Date.now()
+                    })
+                    await transaction.commit();
+                    resolve(true);
+                }
+            });
+        } catch (e) {
+            await transaction.rollback();
+            console.log(e);
+            reject(e);
+        }
     });
 }
 
-async function deleteUser(username) {
+async function deleteUser(username, actionUser) {
+    let transaction = await sequelize.transaction();
     return new Promise(async (resolve, reject) => {
         try {
             let userCurrent = await getUserBysAMAccountName(username);
@@ -339,10 +444,18 @@ async function deleteUser(username) {
                 } else {
                     console.log("delete user ok");
                     await changeUserDn(userCurrent, process.env.OUDELETE);
+                    await Logs.create({
+                        username: actionUser,
+                        accion: acciones.ELIMINAR,
+                        detalle: 'Se ha eliminado el usuario: ' + username,
+                        fecha: Date.now()
+                    }, {transaction})
+                    await transaction.commit();
                     resolve(true);
                 }
             });
         } catch (e) {
+            await transaction.rollback();
             reject(e);
         }
     })
@@ -411,17 +524,18 @@ async function addUserGroup(username, groups) {
 }
 
 function encodePassword(password) {
-    var convertedPassword = ''
-    password = '"' + password + '"'
+    console.log(password)
+    return new Buffer('"' + password + '"', 'utf16le').toString();
+}
 
-    for (var i = 0; i < password.length; i++) {
-        convertedPassword += String.fromCharCode(
-            password.charCodeAt(i) & 0xff,
-            (password.charCodeAt(i) >>> 8) & 0xff
-        )
+function generatePassword() {
+    var length = 8,
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        retVal = "";
+    for (var i = 0, n = charset.length; i < length; ++i) {
+        retVal += charset.charAt(Math.floor(Math.random() * n));
     }
-
-    return convertedPassword
+    return retVal;
 }
 
 async function getAllGroup() {
@@ -653,6 +767,7 @@ async function getCountMemberOfDepartment(department) {
         }
     })
 }
+
 async function getAllSoOfComputers() {
 
     return new Promise(async (resolve, reject) => {
@@ -681,7 +796,7 @@ async function getAllSoOfComputers() {
                                     if (namesOfSo.length === 0) {
                                         namesOfSo.push(copy.operatingSystem)
                                     } else {
-                                        if (!namesOfSo.includes(copy.operatingSystem)){
+                                        if (!namesOfSo.includes(copy.operatingSystem)) {
                                             namesOfSo.push(copy.operatingSystem)
                                         }
                                     }
@@ -707,8 +822,7 @@ async function getAllSoOfComputers() {
                     }
                 }
             )
-        }
-        catch (e) {
+        } catch (e) {
             reject(e)
         }
 
@@ -721,7 +835,7 @@ async function getCountComputersOfSo(SO) {
     return new Promise((resolve, reject) => {
         try {
             var opts = {
-                filter: "(operatingSystem=" + SO +")",
+                filter: "(operatingSystem=" + SO + ")",
                 scope: "sub",
                 // attributes: [
                 //     "operatingSystem"
@@ -758,11 +872,50 @@ async function getCountComputersOfSo(SO) {
                     }
                 }
             )
-        }
-        catch (e) {
+        } catch (e) {
             reject(e);
         }
     })
+}
+
+async function changePassword(username, actionUser) {
+    let transaction = await sequelize.transaction();
+    let password = generatePassword();
+    return new Promise(async (resolve, reject) => {
+        try {
+            let userCurrent = await getUserBysAMAccountName(username);
+            client.modify(userCurrent.dn, [
+                new ldap.Change({
+                    operation: 'replace',
+                    modification: {
+                        unicodePwd: encodePassword(password)
+                    }
+                })
+            ], async function (err) {
+                if (err) {
+                    console.log(err.code);
+                    console.log(err.name);
+                    console.log(err.message);
+                    client.unbind();
+                    reject(e)
+                } else {
+                    await Logs.create({
+                        username: actionUser,
+                        accion: acciones.CAMBIO_CLAVE,
+                        detalle: 'Se ha realizado el cambio de contraseña para el usuario: ' + username,
+                        fecha: Date.now()
+                    })
+                    await transaction.commit();
+                    console.log('Password changed!', password);
+                    resolve(password)
+                }
+            });
+        } catch (e) {
+            await transaction.rollback();
+            reject(e)
+        }
+    })
+
 }
 
 
@@ -779,5 +932,6 @@ module.exports = {
     getDepartments,
     getCountMemberOfDepartment,
     getAllSoOfComputers,
-    getCountComputersOfSo
+    getCountComputersOfSo,
+    changePassword
 }

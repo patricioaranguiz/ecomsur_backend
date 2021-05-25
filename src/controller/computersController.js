@@ -4,6 +4,7 @@ const { getAllSoOfComputers, getCountComputersOfSo}  = require('../utils/ldapUti
 
 exports.getAllComputers = async function(req, res) {
     try {
+        console.log(req.headers);
         await jwtVerify(req.headers.authorization);
         let response = await getAllSoOfComputers()
         response = await Promise.all(response.map(async item => {
