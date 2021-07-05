@@ -3,7 +3,9 @@ const {
     getAllGroup,
     getAllGroupAndMember,
     getCountMemberOfDepartment,
-    getDepartments
+    getDepartments,
+    getEmployments,
+    getCountMemberOfEmployment
 } = require('../utils/ldapUtils')
 
 
@@ -21,7 +23,7 @@ exports.getGroups = async function (req, res) {
     }
 }
 
-exports.getAllGroupsAndMember = async function(req, res) {
+exports.getAllGroupsAndMember = async function (req, res) {
     try {
 
         await jwtVerify(req.headers.authorization);
@@ -36,7 +38,7 @@ exports.getAllGroupsAndMember = async function(req, res) {
     }
 }
 
-exports.getMemberOfDepartment = async function(req, res) {
+exports.getMemberOfDepartment = async function (req, res) {
     try {
         await jwtVerify(req.headers.authorization);
         let response = await getDepartments()
@@ -44,8 +46,23 @@ exports.getMemberOfDepartment = async function(req, res) {
             return {name: item.name, count: await getCountMemberOfDepartment(item.dn)};
         }))
         res.status(200).json(response);
+    } catch (e) {
+        if (e.code) {
+            res.status(e.code).send(e.message);
+        } else {
+            res.status(500).send('Ocurrio un error');
+        }
     }
-    catch (e) {
+}
+
+exports.getMemberOfEmployment = async function (req, res) {
+    try {
+        await jwtVerify(req.headers.authorization);
+        let response = await getEmployments()
+        //console.log(response)
+        res.status(200).json(response);
+        // res.status(200).send('ok');
+    } catch (e) {
         if (e.code) {
             res.status(e.code).send(e.message);
         } else {

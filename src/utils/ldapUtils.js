@@ -33,7 +33,7 @@ const acciones = {
 }
 
 const ldapOptions = {
-    url: ["ldaps://192.168.0.20"],
+    url: ["ldaps://" + process.env.IPLDAP],
     bindDN: "ecomsur.cl",
     reconnect: true,
     idleTimeout: 3000,
@@ -918,6 +918,121 @@ async function changePassword(username, actionUser) {
 
 }
 
+async function getEmployments() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const namesEmployments = [];
+            var opts = {
+                filter: "(objectClass=organizationalPerson)",
+                scope: "sub",
+                attributes: [
+                    "title",
+                    "dn"
+                ]
+
+            };
+            client.search(
+                process.env.OUUSERS,
+                opts,
+                async function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        res.on("searchEntry", async function (entry) {
+                            //console.log("entry : " + JSON.stringify(entry.object));
+                            if (process.env.OUUSERS !== entry.object.dn) {
+                                const copy = Object.assign({}, entry.object);
+                                if (copy.title) {
+                                    if (namesEmployments.length === 0) {
+                                        namesEmployments.push({name: copy.title, count: 1})
+                                    } else {
+                                            var index = namesEmployments.findIndex(x => x.name === copy.title);
+                                            if(index > 0) {
+                                                namesEmployments[index].count = namesEmployments[index].count + 1;
+                                            } else {
+                                                namesEmployments.push({name: copy.title, count: 1})
+                                            }
+
+                                    }
+                                } else {
+                                    var index = namesEmployments.findIndex(x => x.name === "Sin Cargo");
+                                    if(index > 0) {
+                                        namesEmployments[index].count = namesEmployments[index].count + 1;
+                                    } else {
+                                        namesEmployments.push({name: "Sin Cargo", count: 1})
+                                    }
+                                }
+                            }
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: => " + result.status);
+                            console.log(namesEmployments)
+                            resolve(namesEmployments);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                })
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+async function getCountMemberOfEmployment(employment) {
+
+    return new Promise((resolve, reject) => {
+        try {
+            var opts = {
+                filter: "(title=" + employment + ")",
+                scope: "sub"
+
+            };
+            client.search(process.env.OUUSERS,
+                opts,
+                function (err, res) {
+                    if (err) {
+                        console.log("Error in search " + err);
+                        reject(err)
+                    } else {
+                        let count = 0;
+                        res.on("searchEntry", function (entry) {
+                            count++;
+                        });
+                        res.on("error", function (err) {
+                            console.error("error: " + err.message);
+                            if (JSON.stringify(err.lde_message).includes("DSID-0C090A22")) {
+                                reject({code: 403, message: "Credenciales Invalidas"});
+                            } else {
+                                reject(err);
+                            }
+                        });
+                        res.on("end", function (result) {
+                            console.log("status: " + result.status);
+                            resolve(count);
+                        });
+                        res.on("close", function () {
+                            console.log("close");
+                        });
+                    }
+                })
+
+        } catch (e) {
+            console.log(e)
+            reject(e)
+        }
+    })
+}
 
 module.exports = {
     autenticate,
@@ -933,5 +1048,7 @@ module.exports = {
     getCountMemberOfDepartment,
     getAllSoOfComputers,
     getCountComputersOfSo,
-    changePassword
+    changePassword,
+    getEmployments,
+    getCountMemberOfEmployment
 }

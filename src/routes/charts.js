@@ -9,4 +9,6 @@ router.get('/computers', ComputersController.getAllComputers);
 
 router.get('/getMemberOfDeparment', GroupsController.getMemberOfDepartment)
 
+router.get('/getMemberOfEmployment', GroupsController.getMemberOfEmployment)
+
 module.exports = router;
