@@ -948,7 +948,7 @@ async function getEmployments() {
                                         namesEmployments.push({name: copy.title, count: 1})
                                     } else {
                                             var index = namesEmployments.findIndex(x => x.name === copy.title);
-                                            if(index > 0) {
+                                            if(index >= 0) {
                                                 namesEmployments[index].count = namesEmployments[index].count + 1;
                                             } else {
                                                 namesEmployments.push({name: copy.title, count: 1})
@@ -957,7 +957,7 @@ async function getEmployments() {
                                     }
                                 } else {
                                     var index = namesEmployments.findIndex(x => x.name === "Sin Cargo");
-                                    if(index > 0) {
+                                    if(index >= 0) {
                                         namesEmployments[index].count = namesEmployments[index].count + 1;
                                     } else {
                                         namesEmployments.push({name: "Sin Cargo", count: 1})
